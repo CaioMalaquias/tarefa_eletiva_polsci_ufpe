@@ -1,4 +1,3 @@
-# tarefa_github__eletiva_polsci_polsci_ufpe
+# tarefas_eletiva_dados_polsci_ufpe
 
-#tarefa de casa pra criar repositório
-#tem nada pra ler aqui não. foi mal ae
+#tarefas para nota

@@ -1,3 +1,5 @@
+
+# ETL REAL ----------------------------------------------------------------
 library(magrittr)
 library(dplyr)
 # carrega a base de snistros de transito do site da PCR
@@ -18,10 +20,8 @@ colnames(sinistrosRecife2019Raw)[1] <- "data"
 # junta as bases de dados com comando rbind (juntas por linhas)
 sinistrosRecifeRaw <- rbind(sinistrosRecife2018Raw, sinistrosRecife2019Raw,
                             sinistrosRecife2020Raw, sinistrosRecife2021Raw)
-
 # observa a estrutura dos dados
 str(sinistrosRecifeRaw)
-
 # modifca a data para formato date
 sinistrosRecifeRaw$data <- as.Date(sinistrosRecifeRaw$data, format = "%Y-%m-%d")
 
@@ -39,8 +39,64 @@ naZero <- function(x) {
 # aplica a função naZero a todas as colunas de contagem
 sinistrosRecifeRaw[, 15:25] <- sapply(sinistrosRecifeRaw[, 15:25], naZero)
 
-# exporta em formato nativo do R
-saveRDS(sinistrosRecifeRaw, "bases_tratadas/sinistrosRecife.rds")
+# EXTRAÇÃO -----------------------------------------------------------------
 
-# exporta em formato tabular (.csv) - padrão para interoperabilidade
+ls() # lista todos os objetos no R
+# vamos ver quanto cada objeto está ocupando
+for (itm in ls()) {
+  print(formatC(c(itm, object.size(get(itm))),
+                format="d",
+                width=30),
+        quote=F)
+}
+
+rm(list = c('sinistrosRecife2020Raw', 'sinistrosRecife2021Raw'))
+
+saveRDS(sinistrosRecifeRaw, "bases_tratadas/sinistrosRecife.rds")
 write.csv2(sinistrosRecifeRaw, "bases_tratadas/sinistrosRecife.csv")
+
+# LEITURA -----------------------------------------------------------------
+
+# arquivos em formato nativo do R têm a vantagem de ser otimizado para o R, o
+# que gera melhor desempenho computacional (no caso, usa menos menória RAM), e a
+# desvantagem é ser restrito ao R
+#
+# formatos não nativos são o oposto: menor eficiência que os nativos, porém
+# com a grande vantagem de serem utilizados em outros sistemas e linguagens
+
+library(rio)
+export(x = sinistrosRecifeRaw, file = "sinistrosRecife.csv")
+import("sinistrosRecife.csv")
+
+# benchmark
+install.packages("microbenchmark")
+library(microbenchmark)
+library(readxl)
+
+#benchmark das funções de exportação saveRDS, write.csv2, e export
+microbenchmark(a <- saveRDS(sinistrosRecifeRaw, "sinistrosRecife.rds"),
+               b <- write.csv2(sinistrosRecifeRaw, "sinistrosRecife.csv"),
+               c <- export(x = sinistrosRecifeRaw, file = "sinistrosRecife.csv"),
+               times = 30L)
+# a função do pacote rio foi 5 vezes mais rápida. até mesmo ao salvar um csv
+# comparado com o arquivo rds
+
+#benchmark das funções de leitura readRDS, read.csv2, e import
+microbenchmark(a <- readRDS('sinistrosRecife.rds'),
+               b <- read.csv2('sinistrosRecife.csv', sep = ';'),
+               c <- import("sinistrosRecife.csv"),
+               times = 30L)
+
+# ETL TEÓRICO -------------------------------------------------------------
+# ~Extração~ é a área voltada para a captura dos dados de alguma fonte. Cuidados
+# com a formatação inicial e validação são essenciais.
+# ~Transformação~ é o preparo dos dados para o futuro carregamento. Aqui é
+# importante e necessário o conhecimento prévio do objetivo do projeto como um
+# todo, para melhor selecionar e tratar os dados.
+# ~Load~ é o carregamento dos dados em alguma plataforma, e em algum formato
+# acessível para a equipe que os vai utilizar.
+# na ELT, os dados são carregados primeiro, e o tratamento ocorre depois. Isso é
+# especialmente útil quando a equipe de analytics - ou várias outras equipes
+# secundárias - utilizarão muitas variáveis com diferentes níveis e tipos de
+# tratamento, de modo que inviabilizaria o tratamento pela equipe que os
+# carregou. Um tratamento prévio poderia suprimir informações úteis.

@@ -25,8 +25,7 @@ bd <-
 # Mais Fatores ---------------------------------------------------
 # One Hot Encoding
 
-bdFatores <- sapply(bd, is.factor)
-bdFatores <- bd[ , bdFatores]
+bdFatores <- bd[ , sapply(bd, is.factor)]
 
 bdDummy <- bdFatores |> acm.disjonctif()
 

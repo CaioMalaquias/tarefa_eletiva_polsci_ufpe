@@ -1,5 +1,5 @@
 # Bibliotecas ---
-install.packages("data.table")
+
 library(data.table)
 library(tidyverse)
 library(ade4)
@@ -25,7 +25,7 @@ bd <-
 # Mais Fatores ---------------------------------------------------
 # One Hot Encoding
 
-bdFatores <- unlist(lapply(bd, is.factor))
+bdFatores <- sapply(bd, is.factor)
 bdFatores <- bd[ , bdFatores]
 
 bdDummy <- bdFatores |> acm.disjonctif()

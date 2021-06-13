@@ -1,48 +1,81 @@
-# Bibliotecas ---
-
+# BIBLIOTECAS --------------------------------------------------------
 library(data.table)
 library(tidyverse)
-library(ade4)
-library(arules)
 
-# Criando base ---
-semente <- addTaskCallback(function(...) {set.seed(99);TRUE}) #cria/roda semente
-#~~cria data frame do banco de dados puro
-BD_RAW <- data.frame(votoTipo = sample(c(0:3), 100, replace = TRUE),
-                     renda = rnorm(n = 100, mean = 1000, sd = 90),
-                     idade = rnorm(n = 100, mean = 25, sd = 5),
-                     sexo  = sample(c("Masc", "Fem"), 100, replace = TRUE))
-removeTaskCallback(semente) # para semente
+# VALORES AUSENTES ---------------------------------------------------
+db <- poliscidata::world
 
-# Tipos e Fatores -------------------------------------------------
-votoCode <- c(ideologico = 0, estrategico = 1, retrospectivo = 2, economico = 3)
+# Verificando NAs
+db |> funModeling::status()
 
-bd <-
-  BD_RAW |>
-  mutate(votoTipo = factor(votoTipo, levels = votoCode, labels = names(votoCode)),
-         sexo = as.factor(sexo))
+# criando shadow matrix (sm)
+db_sm <-
+  db|>
+  is.na() |>
+  abs() |>
+  as.data.frame()
+db_sm |> head()
 
-# Mais Fatores ---------------------------------------------------
-# One Hot Encoding
+y <- db_sm[which(sapply(db_sm, sd) > 0)]# mantém apenas variáveis que possuem NA
+y |> cor() # observa a correlação entre variáveis
 
-bdFatores <- bd[ , sapply(bd, is.factor)]
+# OUTLIERS -----------------------------------------------------------
 
-bdDummy <- bdFatores |> acm.disjonctif()
+# carregar dados covid19 Pernambuco
+COVID <- rio::import('https://dados.seplag.pe.gov.br/apps/basegeral.csv')
 
-# transformação dos fatores de uma base de dados em 3 tipos:
-# mais frequente, segundo mais frequente e outros
-bd$votoTipo |> fct_lump(n = 2)
+COVID_Mun <-
+  COVID |>
+  count(municipio, sort = T, name = 'casos') |>
+  mutate(casos2 = sqrt(casos), casosLog = log10(casos))
 
-# Dplyr --------------------------------------------------------------
-bd |>
-  filter(idade >= 18) |> # manipulação de casos
-  group_by(votoTipo, sexo) |> # agrupamento
-  summarise(mediarenda = mean(renda, na.rm = TRUE),
-            MediaIdAde = mean(idade, na.rm = TRUE)) |> # sumário
-  rename(rendaMedia = mediarenda, # manipulação da variável mediarenda
-         idadeMedia = MediaIdAde) # manipulação da variável MediaIdAde
+## outliers em variáveis
+# distância interquartil
 
-# Data Table ---------------------------------------------------------
-bdDT <- bd |> setDT()
-# Regressão
-regbd <- bdDT[ ,lm(formula = votoTipo ~ renda + idade + sexo)]
+plotly::plot_ly(y = COVID_Mun$casos2, type = "box", text = COVID_Mun$municipio, boxpoints = "all", jitter = 0.3)
+boxplot.stats(COVID_Mun$casos2)$out
+boxplot.stats(COVID_Mun$casos2, coef = 2)$out
+
+COVIDOut <- boxplot.stats(COVID_Mun$casos2)$out
+COVIDOutIndex <- which(COVID_Mun$casos2 %in% c(COVIDOut))
+COVIDOutIndex
+
+# filtro de Hamper
+lower_bound <- median(COVID_Mun$casos2) - 3 * mad(COVID_Mun$casos2, constant = 1)
+upper_bound <- median(COVID_Mun$casos2) + 3 * mad(COVID_Mun$casos2, constant = 1)
+(outlier_ind <- which(COVID_Mun$casos2 < lower_bound | COVID_Mun$casos2 > upper_bound))
+
+# teste de Rosner
+covid19PERosner <- EnvStats::rosnerTest(COVID_Mun$casos2, k = 10)
+covid19PERosner
+covid19PERosner$all.stats
+
+# Imputação ----------------------------------------------------------
+
+## imputação numérica
+# preparação da base, colocando NA aleatórios
+COVID_DT <- COVID_Mun |> setDT() #copiar base iris, usando a data.table
+COVID_DT <-
+  COVID_DT |>
+  select(municipio, casos2)
+
+(COVIDNASeed <- round(runif(188, 1, 50))) # criando 188 valores aleatórios
+(COVID_DT$casos2[COVIDNASeed] <- NA) # imputamos NA nos valores aleatórios
+
+# tendência central
+COVID_DT$casos2_mean <-
+  COVID_DT$casos2 |>
+  Hmisc::impute(fun = mean)
+COVID_DT$casos2_median <-
+  COVID_DT$casos2 |>
+  Hmisc::impute(fun = median)
+
+#Testando se os valores foram imputados
+COVID_DT$casos2_mean |> Hmisc::is.imputed() |> table()
+COVID_DT$casos2_median |> Hmisc::is.imputed() |> table()
+
+## Hot deck
+# imputação aleatória
+(COVID_DT$casos2_random <- impute(COVID_DT$casos2, "random"))
+# imputação por instâncias
+COVID_DT2 <- COVID_DT |> VIM::kNN()

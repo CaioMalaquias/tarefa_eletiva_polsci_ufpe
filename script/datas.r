@@ -12,10 +12,6 @@ data_ct |> lubridate::year() # ano
 data_ct |> lubridate::wday() # dia da semana (número)
 data_lt |> lubridate::isoweek() # semana ISO
 
-install.packages("zoo", dependencies = TRUE)
-install.packages("drc", dependencies = TRUE)
-install.packages("plotly", dependencies = TRUE)
-
 # DATAS NA PRÁTICA ---------------------------------------------------
 ###
 url = 'https://raw.githubusercontent.com/wcota/covid19br/master/cases-brazil-states.csv' # passar a url para um objeto
